@@ -1,0 +1,22 @@
+# Levanta el Jenkins de práctica:  docker compose up -d --build   (desde esta carpeta)
+services:
+  jenkins:
+    build: .
+    container_name: jenkins-practica
+    ports:
+      - "${JENKINS_PORT:-8080}:8080"
+    env_file: .env
+    environment:
+      - DOCKERHUB_USER=${DOCKERHUB_USER}
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # Jenkins usa el Docker del equipo para construir las imágenes.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Permiso para usar el socket de Docker. En Docker Desktop el socket pertenece al grupo 0;
+    # en Linux, cambia DOCKER_GID en .env por el resultado de: getent group docker | cut -d: -f3
+    group_add:
+      - "${DOCKER_GID:-0}"
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:

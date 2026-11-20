@@ -156,6 +156,7 @@ El job `pruebas-en-vivo` (`ci/PruebasEnVivo.Jenkinsfile`) se ejecuta cada noche 
 | Página Resumen de una ejecución exitosa | `docs/capturas/resumen-exito.png` |
 | Página Resumen de una ejecución que falla por los topes | `docs/capturas/resumen-fallo.png` |
 | Pruebas en vivo sobre la imagen publicada | `docs/capturas/pruebas-en-vivo.png` |
+| Trazabilidad de la imagen publicada (etiquetas OCI y `/health`) | `docs/capturas/trazabilidad.png` |
 | Imagen publicada en el registro | `docs/capturas/registro-local.png` |
 
 ## 8. Próximas fases del proyecto

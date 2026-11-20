@@ -3,7 +3,7 @@
 App web de ejemplo (Node.js + Express) para practicar integración y entrega continua en el curso Fundamentos DevOps. La app es intencionalmente pequeña: el foco está en los pipelines.
 
 - **CI con GitHub Actions** (`.github/workflows/ci.yml`): corre en cada push y pull request.
-- **CD con Jenkins** (`Jenkinsfile`): clona, prueba, construye la imagen Docker y la publica en Docker Hub.
+- **CD con Jenkins** (`Jenkinsfile`): clona, prueba, construye la imagen Docker y la publica en un registro: Docker Hub o un registro local que se levanta junto con Jenkins.
 - **Jenkins como código** (`jenkins/`): Docker + Configuration as Code (JCasC). Cualquier persona lo levanta igual en su equipo.
 
 ## Flujo CI/CD
@@ -15,7 +15,7 @@ flowchart LR
   gh -->|cada 5 min revisa main| jk[Jenkins]
   jk --> t[Lint y pruebas<br/>docker build --target test]
   t --> b[Construir imagen<br/>usuario/catalogo-cursos:1.0.N]
-  b --> p[Publicar en Docker Hub]
+  b --> p[Publicar en el registro<br/>Docker Hub o localhost:5000]
   p --> d[Desplegar<br/>Kubernetes, fase 2]
 ```
 
@@ -27,7 +27,7 @@ flowchart LR
 | Pruebas | `node --test` | Prueba los endpoints `/health` y `/api/cursos`. |
 | Auditoría de dependencias | `npm audit` (Actions) | Avisa de vulnerabilidades altas o críticas en las librerías. |
 | Imagen Docker | Jenkins | Construye la imagen final, sin dependencias de desarrollo y sin root. |
-| Publicación | Jenkins → Docker Hub | Sube la imagen con su versión (`1.0.<build>`) y `latest`. Solo desde `main`. |
+| Publicación | Jenkins → registro | Sube la imagen con su versión (`1.0.<build>`) y `latest` a Docker Hub o al registro local. Solo desde `main`. |
 
 ## Correr la app en tu equipo
 
@@ -47,17 +47,21 @@ docker run -p 3000:3000 catalogo-cursos
 
 ## Levantar Jenkins (práctica local)
 
-Requisitos: Docker Desktop encendido y una cuenta de Docker Hub con un token de acceso.
+Requisitos: Docker Desktop encendido. La cuenta de Docker Hub es opcional: `docker-compose.yml` también levanta un registro local (`registry:2`) en el puerto 5000.
 
 1. Copia `jenkins/.env.example` como `jenkins/.env` y llena los valores. **El `.env` no se sube a Git.**
+   - `REGISTRY_HOST=localhost:5000`: publica en el registro local, sin cuenta ni token.
+   - `REGISTRY_HOST=docker.io`: publica en Docker Hub con `DOCKERHUB_USER` y `DOCKERHUB_TOKEN`.
 2. Desde la carpeta `jenkins/`:
 
    ```bash
    docker compose up -d --build
    ```
 
-3. Entra a <http://localhost:8080> con el usuario `admin` y la clave que pusiste en `.env`.
+3. Entra a <http://localhost:8080> (o el puerto de `JENKINS_PORT`) con el usuario `admin` y la clave que pusiste en `.env`.
 4. El job `catalogo-cursos-cd` ya está creado. Ejecútalo con **Build Now**; después, Jenkins revisa `main` cada 5 minutos.
+
+Para ver las imágenes publicadas en el registro local: <http://localhost:5000/v2/_catalog>.
 
 Para apagarlo: `docker compose down`. Para borrar también su historial: `docker compose down -v`.
 

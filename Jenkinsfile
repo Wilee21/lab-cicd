@@ -1,5 +1,6 @@
 // Pipeline de entrega continua (CD). Corre en el Jenkins de la carpeta jenkins/.
-// Necesita la credencial "dockerhub" (usuario + token), que JCasC crea a partir del archivo .env.
+// Publica en el registro de REGISTRY_HOST: "docker.io" (Docker Hub) o "localhost:5000" (registro local
+// de docker-compose, sin cuenta). Docker Hub usa la credencial "dockerhub", que JCasC crea desde el .env.
 pipeline {
   agent any
 
@@ -10,7 +11,8 @@ pipeline {
   }
 
   environment {
-    IMAGEN = "${env.DOCKERHUB_USER}/catalogo-cursos"
+    REGISTRO = "${env.REGISTRY_HOST ?: 'docker.io'}"
+    IMAGEN = "${env.REGISTRY_HOST ?: 'docker.io'}/${env.DOCKERHUB_USER}/catalogo-cursos"
     VERSION = "1.0.${env.BUILD_NUMBER}"
   }
 
@@ -39,16 +41,23 @@ pipeline {
       }
     }
 
-    stage('Publicar en Docker Hub') {
+    stage('Publicar imagen en el registro') {
       // Solo se publica lo que llega a main (GIT_BRANCH lo define checkout scm: "origin/main").
       when { expression { env.GIT_BRANCH?.endsWith('main') } }
       steps {
-        withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DH_USER', passwordVariable: 'DH_TOKEN')]) {
-          sh '''
-            echo "$DH_TOKEN" | docker login -u "$DH_USER" --password-stdin
-            docker push ${IMAGEN}:${VERSION}
-            docker push ${IMAGEN}:latest
-          '''
+        script {
+          if (env.REGISTRO.startsWith('localhost')) {
+            // Registro local de práctica: no pide usuario ni token.
+            sh 'docker push ${IMAGEN}:${VERSION} && docker push ${IMAGEN}:latest'
+          } else {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DH_USER', passwordVariable: 'DH_TOKEN')]) {
+              sh '''
+                echo "$DH_TOKEN" | docker login -u "$DH_USER" --password-stdin
+                docker push ${IMAGEN}:${VERSION}
+                docker push ${IMAGEN}:latest
+              '''
+            }
+          }
         }
       }
     }
@@ -63,7 +72,7 @@ pipeline {
 
   post {
     always {
-      sh 'docker logout || true'
+      sh 'docker logout ${REGISTRO} || true'
       sh 'docker image rm catalogo-cursos:test-${BUILD_NUMBER} || true'
     }
   }

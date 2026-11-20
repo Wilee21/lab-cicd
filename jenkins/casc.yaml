@@ -26,13 +26,13 @@ credentials:
 
 unclassified:
   location:
-    url: http://localhost:8080/
+    url: http://localhost:${JENKINS_PORT:-8080}/
 
 # El job se crea solo: lee el Jenkinsfile del repositorio indicado en GIT_REPO_URL.
 jobs:
   - script: >
       pipelineJob('catalogo-cursos-cd') {
-        description('Entrega continua: clona, prueba, construye la imagen Docker y la publica en Docker Hub.')
+        description('Entrega continua: clona, prueba, construye la imagen Docker y la publica en el registro (Docker Hub o local).')
         triggers { scm('H/5 * * * *') }
         definition {
           cpsScm {

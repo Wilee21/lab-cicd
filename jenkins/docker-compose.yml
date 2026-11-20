@@ -1,4 +1,7 @@
 # Levanta el Jenkins de práctica:  docker compose up -d --build   (desde esta carpeta)
+# Nombre propio del proyecto: evita chocar con otros docker-compose guardados en carpetas "jenkins".
+name: lab-cicd
+
 services:
   jenkins:
     build: .
@@ -16,7 +19,21 @@ services:
     # en Linux, cambia DOCKER_GID en .env por el resultado de: getent group docker | cut -d: -f3
     group_add:
       - "${DOCKER_GID:-0}"
+    depends_on:
+      - registry
+    restart: unless-stopped
+
+  # Registro de imágenes local (alternativa a Docker Hub para practicar sin cuenta).
+  # Jenkins publica aquí cuando REGISTRY_HOST=localhost:5000. Ver: http://localhost:5000/v2/_catalog
+  registry:
+    image: registry:2
+    container_name: registro-practica
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry_data:/var/lib/registry
     restart: unless-stopped
 
 volumes:
   jenkins_home:
+  registry_data:

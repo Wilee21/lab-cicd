@@ -1,6 +1,6 @@
 # Etapa 1: dependencias completas, análisis estático y pruebas. Permite validar el código con Docker
 # como único requisito:  docker build --target test .
-FROM node:24-alpine AS test
+FROM node:26-alpine AS test
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ COPY . .
 RUN npm run lint && npm test
 
 # Etapa 2: imagen final, con dependencias de producción únicamente y sin privilegios de root.
-FROM node:24-alpine AS runtime
+FROM node:26-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./

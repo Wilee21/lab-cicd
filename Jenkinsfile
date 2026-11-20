@@ -31,7 +31,8 @@ pipeline {
   stages {
     stage('Revisar costos') {
       steps {
-        sh 'sh ci/revisar-costos.sh'
+        // La salida queda en reportes/ para que la página Resumen muestre el motivo exacto.
+        sh 'mkdir -p reportes && sh ci/revisar-costos.sh > reportes/costos.txt 2>&1; s=$?; cat reportes/costos.txt; exit $s'
         script {
           topes = leerTopes(readFile('ci/topes-calidad.properties'))
           echo "Topes de calidad: ${topes}"
@@ -42,7 +43,7 @@ pipeline {
           env.ETIQUETA = "${rama}-${env.SHA7}-${env.BUILD_NUMBER}"
           currentBuild.description = "${env.SHA7} · en curso"
         }
-        sh 'mkdir -p reportes && git log -1 --format="%h %an: %s"'
+        sh 'git log -1 --format="%h %an: %s"'
       }
     }
 
@@ -67,7 +68,7 @@ pipeline {
         }
         stage('Dependencias (npm audit)') {
           steps {
-            sh 'sh ci/en-node.sh "npm audit --omit=dev --audit-level=high"'
+            sh 'sh ci/en-node.sh "npm audit --omit=dev --audit-level=high" > reportes/npm-audit.txt 2>&1; s=$?; cat reportes/npm-audit.txt; exit $s'
           }
         }
       }

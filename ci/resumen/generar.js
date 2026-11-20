@@ -60,6 +60,12 @@ const frenos = (env.FRENOS || '').split(';').filter(Boolean);
 
 // --- Motivos de falla ---
 const motivos = [];
+for (const linea of (leer('reportes/costos.txt') || '').split(/\r?\n/)) {
+  if (linea.startsWith('COSTOS: ')) motivos.push(`Revisión de costos: ${linea.slice(8)}.`);
+}
+const audit = leer('reportes/npm-audit.txt') || '';
+const vulnerables = audit.match(/(\d+) (high|critical)/gi);
+if (vulnerables) motivos.push(`npm audit encontró vulnerabilidades: ${vulnerables.join(', ')}.`);
 if (secretos.length) motivos.push(`Gitleaks encontró ${secretos.length} posible(s) secreto(s) en el historial.`);
 if (fallidas.length) motivos.push(`${fallidas.length} prueba(s) fallaron.`);
 if (Number.isFinite(topes.eslint) && eslint.length > topes.eslint) {
@@ -70,7 +76,7 @@ if (Number.isFinite(topes.eslint) && eslint.length > topes.eslint) {
 if (cobertura !== null && Number.isFinite(topes.coberturaLineas) && cobertura < topes.coberturaLineas) {
   motivos.push(`La cobertura de líneas es ${pct(cobertura)} %; el mínimo es ${topes.coberturaLineas} %.`);
 }
-for (const etapa of frenos.filter((f) => f !== 'ESLint')) {
+for (const etapa of frenos.filter((f) => f !== 'ESLint' && f !== 'Gitleaks')) {
   if (!motivos.some((m) => m.toLowerCase().includes(etapa.toLowerCase().split(' ')[0]))) {
     motivos.push(`No terminó la etapa "${etapa}".`);
   }

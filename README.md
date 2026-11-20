@@ -161,3 +161,17 @@ Regla del laboratorio: **todo gratuito y local**. Jenkins, sus plugins, las imá
 ## Evidencias
 
 La documentación técnica completa se encuentra en [`docs/documentacion-tecnica.md`](docs/documentacion-tecnica.md) y las capturas de ejecución en [`docs/capturas/`](docs/capturas/).
+
+**Pipeline en Jenkins (`main`)**
+
+![Vista de stages del pipeline en Jenkins](docs/capturas/jenkins.png)
+
+**Página Resumen: ejecución exitosa y ejecución detenida por los topes de calidad**
+
+![Página Resumen de una ejecución exitosa](docs/capturas/resumen-exito.png)
+
+![Página Resumen de una ejecución que falla por los topes](docs/capturas/resumen-fallo.png)
+
+**Integración continua en GitHub Actions**
+
+![Ejecución del pipeline de CI en GitHub Actions](docs/capturas/github-actions.png)

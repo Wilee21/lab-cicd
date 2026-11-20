@@ -152,6 +152,7 @@ El job `pruebas-en-vivo` (`ci/PruebasEnVivo.Jenkinsfile`) se ejecuta cada noche 
 | --- | --- |
 | Ejecución del pipeline de CI en GitHub Actions | `docs/capturas/github-actions.png` |
 | Vista de stages del pipeline en Jenkins (`main`) | `docs/capturas/jenkins.png` |
+| Ramas del job multibranch (incluida una rama detenida por la revisión de costos) | `docs/capturas/jenkins-ramas.png` |
 | Página Resumen de una ejecución exitosa | `docs/capturas/resumen-exito.png` |
 | Página Resumen de una ejecución que falla por los topes | `docs/capturas/resumen-fallo.png` |
 | Pruebas en vivo sobre la imagen publicada | `docs/capturas/pruebas-en-vivo.png` |

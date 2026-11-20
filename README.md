@@ -123,7 +123,7 @@ docker run -p 3000:3000 catalogo-cursos
 4. Ingresar a <http://localhost:8080> (o al puerto de `JENKINS_PORT`) con el usuario `admin`. La contraseña se copia al portapapeles con `jenkins\secretos\copiar-secreto.ps1 JENKINS_ADMIN_PASSWORD`.
 5. Jenkins crea solo el job multibranch `catalogo-cursos` (revisa las ramas cada cinco minutos) y el job `pruebas-en-vivo`. Si un job nuevo de `casc.yaml` no aparece tras el primer arranque, basta con `docker restart jenkins-practica`.
 
-Las imágenes publicadas en el registro local pueden consultarse en <http://localhost:5000/v2/_catalog>. Para detener el entorno: `docker compose stop` en `jenkins/`; para eliminar también el historial y las imágenes almacenadas: `docker compose down -v`.
+Las imágenes publicadas en el registro local pueden consultarse en <http://localhost:5000/v2/_catalog>. Para detener el entorno: `docker stop jenkins-practica registro-practica` (Docker Compose exige los secretos incluso para detenerlo, por eso se usan los nombres de los contenedores); para volver a iniciarlo, `arrancar-jenkins.ps1`.
 
 ## Secretos
 

@@ -14,3 +14,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Un cambio de versión mayor de Node.js es una decisión explícita: debe aprobarse también en
+    # ci/revisar-costos.sh, en el workflow y en "engines" de package.json, no llegar como actualización.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

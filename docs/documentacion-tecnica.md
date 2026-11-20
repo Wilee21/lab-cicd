@@ -84,7 +84,8 @@ La carpeta `jenkins/` contiene todo lo necesario para levantar Jenkins igual en 
 | --- | --- |
 | Ejecución de GitHub Actions | `docs/capturas/github-actions.png` |
 | Ejecución del pipeline en Jenkins | `docs/capturas/jenkins.png` |
-| Consola del build en Jenkins | `docs/capturas/jenkins-consola.png` |
+| Pruebas dentro del pipeline de Jenkins | `docs/capturas/jenkins-pruebas.png` |
+| Final del build en Jenkins (publicación y SUCCESS) | `docs/capturas/jenkins-consola.png` |
 | Imagen publicada en el registro | `docs/capturas/registro-local.png` |
 
 ## 7. Próximas fases

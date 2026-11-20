@@ -1,7 +1,8 @@
 # Configuración completa de Jenkins como código (JCasC). Se aplica en cada arranque.
-# Los secretos NO están aquí: llegan como variables de entorno desde el archivo .env (fuera de Git).
+# Este archivo no contiene secretos: las contraseñas y el token llegan como variables de entorno, que
+# arrancar-jenkins.ps1 lee del Administrador de credenciales de Windows (ver README, "Secretos").
 jenkins:
-  systemMessage: "Jenkins de práctica - Catálogo de cursos (Fundamentos DevOps)"
+  systemMessage: "Jenkins del laboratorio de CI/CD - Catálogo de cursos (Fundamentos DevOps)"
   numExecutors: 2
   securityRealm:
     local:
@@ -9,9 +10,22 @@ jenkins:
       users:
         - id: admin
           password: ${JENKINS_ADMIN_PASSWORD}
+        # Usuario de solo lectura: lo usan los avisos de Windows para consultar la API.
+        - id: lector
+          password: ${JENKINS_LECTOR_PASSWORD}
+  # Permisos por usuario (plugin matrix-auth). Sin acceso anónimo.
   authorizationStrategy:
-    loggedInUsersCanDoAnything:
-      allowAnonymousRead: false
+    globalMatrix:
+      entries:
+        - user:
+            name: "admin"
+            permissions:
+              - "Overall/Administer"
+        - user:
+            name: "lector"
+            permissions:
+              - "Overall/Read"
+              - "Job/Read"
 
 credentials:
   system:
@@ -20,29 +34,75 @@ credentials:
           - usernamePassword:
               scope: GLOBAL
               id: dockerhub
-              description: "Docker Hub (usuario + token de acceso)"
+              description: "Docker Hub (usuario + token de acceso); no se usa con el registro local"
               username: ${DOCKERHUB_USER}
-              password: ${DOCKERHUB_TOKEN}
+              password: ${DOCKERHUB_TOKEN:-sin-token}
 
 unclassified:
   location:
     url: http://localhost:${JENKINS_PORT:-8080}/
 
-# El job se crea solo: lee el Jenkinsfile del repositorio indicado en GIT_REPO_URL.
+# Los jobs se crean automáticamente con Job DSL y leen sus Jenkinsfile del repositorio de GIT_REPO_URL.
 jobs:
-  - script: >
-      pipelineJob('catalogo-cursos-cd') {
-        description('Entrega continua: clona, prueba, construye la imagen Docker y la publica en el registro (Docker Hub o local).')
-        triggers { scm('H/5 * * * *') }
+  - script: |
+      multibranchPipelineJob('catalogo-cursos') {
+        displayName('Catálogo de cursos')
+        description('CI/CD por rama: calidad, seguridad, pruebas, imagen y prueba de humo; main además publica la imagen.')
+        branchSources {
+          branchSource {
+            source {
+              git {
+                id('catalogo-cursos')
+                remote('${GIT_REPO_URL}')
+                traits {
+                  gitBranchDiscovery()
+                }
+              }
+            }
+          }
+        }
+        factory {
+          workflowBranchProjectFactory {
+            scriptPath('Jenkinsfile')
+          }
+        }
+        // Revisa el repositorio cada 5 minutos y crea o actualiza el job de cada rama.
+        triggers {
+          periodicFolderTrigger {
+            interval('5m')
+          }
+        }
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(10)
+          }
+        }
+      }
+  - script: |
+      pipelineJob('pruebas-en-vivo') {
+        displayName('Pruebas en vivo (cada noche)')
+        description('Descarga la última imagen publicada, la arranca y ejecuta las pruebas de test/en-vivo/.')
+        properties {
+          pipelineTriggers {
+            triggers {
+              cron {
+                spec('H 2 * * *')
+              }
+            }
+          }
+        }
         definition {
           cpsScm {
             scm {
               git {
-                remote { url('${GIT_REPO_URL}') }
+                remote {
+                  url('${GIT_REPO_URL}')
+                }
                 branch('*/main')
               }
             }
-            scriptPath('Jenkinsfile')
+            scriptPath('ci/PruebasEnVivo.Jenkinsfile')
+            lightweight(true)
           }
         }
       }

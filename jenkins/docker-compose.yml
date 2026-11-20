@@ -1,35 +1,41 @@
-# Levanta el Jenkins de práctica:  docker compose up -d --build   (desde esta carpeta)
-# Nombre propio del proyecto: evita chocar con otros docker-compose guardados en carpetas "jenkins".
+# Entorno de Jenkins del laboratorio. Se inicia con arrancar-jenkins.ps1 (que entrega los secretos desde el
+# Administrador de credenciales de Windows), no con "docker compose up" directo.
+# Nombre de proyecto explícito, para evitar conflictos con otros proyectos de Compose ubicados en carpetas "jenkins".
 name: lab-cicd
 
 services:
   jenkins:
     build: .
     container_name: jenkins-practica
+    # Solo desde este equipo: Jenkins no queda expuesto a la red.
     ports:
-      - "${JENKINS_PORT:-8080}:8080"
+      - "127.0.0.1:${JENKINS_PORT:-8080}:8080"
+    # .env solo contiene configuración no sensible (registro, usuario, repositorio, puerto).
     env_file: .env
     environment:
-      - DOCKERHUB_USER=${DOCKERHUB_USER}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?falta JENKINS_ADMIN_PASSWORD (usar arrancar-jenkins.ps1)}
+      JENKINS_LECTOR_PASSWORD: ${JENKINS_LECTOR_PASSWORD:?falta JENKINS_LECTOR_PASSWORD (usar arrancar-jenkins.ps1)}
+      # Solo hace falta para publicar en Docker Hub; con el registro local queda vacío.
+      DOCKERHUB_TOKEN: ${DOCKERHUB_TOKEN:-}
     volumes:
       - jenkins_home:/var/jenkins_home
-      # Jenkins usa el Docker del equipo para construir las imágenes.
+      # Jenkins utiliza el motor Docker del equipo anfitrión para construir las imágenes.
       - /var/run/docker.sock:/var/run/docker.sock
-    # Permiso para usar el socket de Docker. En Docker Desktop el socket pertenece al grupo 0;
-    # en Linux, cambia DOCKER_GID en .env por el resultado de: getent group docker | cut -d: -f3
+    # Permiso de acceso al socket de Docker. En Docker Desktop el socket pertenece al grupo 0;
+    # en Linux, asignar a DOCKER_GID en .env el resultado de: getent group docker | cut -d: -f3
     group_add:
       - "${DOCKER_GID:-0}"
     depends_on:
       - registry
     restart: unless-stopped
 
-  # Registro de imágenes local (alternativa a Docker Hub para practicar sin cuenta).
-  # Jenkins publica aquí cuando REGISTRY_HOST=localhost:5000. Ver: http://localhost:5000/v2/_catalog
+  # Registro de imágenes local, alternativa a Docker Hub que no requiere cuenta.
+  # Jenkins publica aquí cuando REGISTRY_HOST=localhost:5000. Catálogo: http://localhost:5000/v2/_catalog
   registry:
     image: registry:2
     container_name: registro-practica
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - registry_data:/var/lib/registry
     restart: unless-stopped

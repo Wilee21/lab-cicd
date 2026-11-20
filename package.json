@@ -1,16 +1,19 @@
 {
   "name": "catalogo-cursos",
   "version": "1.0.0",
-  "description": "App web de ejemplo para practicar CI/CD (Fundamentos DevOps)",
+  "description": "Aplicación web de referencia para la implementación de pipelines de CI/CD (Fundamentos DevOps)",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
     "lint": "eslint .",
-    "test": "node --test test/"
+    "lint:reporte": "eslint . --format json --output-file reportes/eslint.json",
+    "test": "node --test \"test/*.test.js\"",
+    "test:cobertura": "node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reportes/junit.xml --test-reporter=lcov --test-reporter-destination=reportes/lcov.info \"test/*.test.js\"",
+    "test:en-vivo": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reportes/junit-en-vivo.xml \"test/en-vivo/*.test.js\""
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "dependencies": {
     "express": "5.3.0"

@@ -1,4 +1,4 @@
-// Pruebas con el runner nativo de Node (node:test): no requieren dependencias extra.
+// Pruebas de integración con el ejecutor nativo de Node.js (node:test), sin dependencias adicionales.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { crearApp } = require('../src/app');
@@ -14,10 +14,19 @@ before(async () => {
 
 after(() => servidor.close());
 
+test('GET / responde con la página de inicio', async () => {
+  const res = await fetch(`${base}/`);
+  assert.equal(res.status, 200);
+  assert.match(await res.text(), /Catálogo de cursos/);
+});
+
 test('GET /health responde ok', async () => {
   const res = await fetch(`${base}/health`);
   assert.equal(res.status, 200);
-  assert.equal((await res.json()).estado, 'ok');
+  const cuerpo = await res.json();
+  assert.equal(cuerpo.estado, 'ok');
+  assert.ok(cuerpo.version, 'la respuesta incluye la versión');
+  assert.ok(cuerpo.commit, 'la respuesta incluye el commit');
 });
 
 test('GET /api/cursos devuelve la lista de cursos', async () => {

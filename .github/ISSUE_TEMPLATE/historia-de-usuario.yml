@@ -1,0 +1,26 @@
+name: Historia de usuario
+description: Requerimiento con criterios de aceptación verificables.
+title: "[Historia] "
+labels: ["historia"]
+body:
+  - type: textarea
+    id: historia
+    attributes:
+      label: Historia
+      description: "Como <rol>, quiero <funcionalidad>, para <beneficio>."
+    validations:
+      required: true
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptación
+      description: Condiciones verificables que debe cumplir el cambio para considerarse terminado.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: pruebas
+    attributes:
+      label: Pruebas esperadas
+      description: Pruebas automatizadas que deben acompañar el cambio.

@@ -1,0 +1,16 @@
+# Actualizaciones automáticas de dependencias: Dependabot abre un pull request semanal, que pasa por la
+# integración continua y la revisión por pares antes de integrarse.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

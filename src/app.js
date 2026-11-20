@@ -1,4 +1,5 @@
-// API de ejemplo: un catálogo de cursos en memoria. No tiene base de datos para que el foco esté en el pipeline.
+// API de referencia: catálogo de cursos almacenado en memoria. Se omite la base de datos de forma deliberada,
+// ya que el objeto del laboratorio son los pipelines de CI/CD.
 const express = require('express');
 
 const cursos = [
@@ -15,8 +16,15 @@ function crearApp() {
     res.send('<h1>Catálogo de cursos</h1><p>Consulta <a href="/api/cursos">/api/cursos</a>.</p>');
   });
 
-  // Usado por Docker (HEALTHCHECK) y, más adelante, por Kubernetes y el monitoreo.
-  app.get('/health', (_req, res) => res.json({ estado: 'ok', version: process.env.APP_VERSION || 'local' }));
+  // Endpoint de salud: lo utiliza el HEALTHCHECK de Docker y, en fases posteriores, Kubernetes y el monitoreo.
+  // Trazabilidad: la versión y el commit los fija el pipeline al construir la imagen (Dockerfile).
+  app.get('/health', (_req, res) =>
+    res.json({
+      estado: 'ok',
+      version: process.env.APP_VERSION || 'local',
+      commit: process.env.GIT_COMMIT || 'local',
+    }),
+  );
 
   app.get('/api/cursos', (_req, res) => res.json(cursos));
 

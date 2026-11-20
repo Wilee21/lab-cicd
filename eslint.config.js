@@ -2,7 +2,7 @@ const js = require('@eslint/js');
 const globals = require('globals');
 
 module.exports = [
-  { ignores: ['node_modules/', 'jenkins/'] },
+  { ignores: ['node_modules/', 'jenkins/', 'reportes/'] },
   js.configs.recommended,
   {
     languageOptions: { ecmaVersion: 2023, sourceType: 'commonjs', globals: { ...globals.node } },

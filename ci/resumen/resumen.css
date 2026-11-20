@@ -1,0 +1,24 @@
+/* Estilos de la página Resumen. Archivo aparte (no en línea) porque la política de contenido de Jenkins
+   para reportes HTML solo permite hojas de estilo del mismo origen. */
+:root { color-scheme: light dark; --texto: #1f2933; --fondo: #f5f7fa; --panel: #ffffff; --borde: #d9e2ec; }
+@media (prefers-color-scheme: dark) { :root { --texto: #e4e7eb; --fondo: #1a1f24; --panel: #242b33; --borde: #3e4c59; } }
+body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--texto); background: var(--fondo); }
+header { padding: 24px 32px; color: #ffffff; }
+header.paso { background: #2f7d4f; }
+header.fallo { background: #b23b3b; }
+header h1 { margin: 4px 0 8px; font-size: 26px; }
+header a { color: #ffffff; }
+header code { background: rgba(255, 255, 255, 0.15); padding: 1px 6px; border-radius: 4px; }
+.contexto { margin: 0; opacity: 0.85; }
+main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+section { background: var(--panel); border: 1px solid var(--borde); border-radius: 6px; padding: 16px 24px; margin-bottom: 20px; }
+h2 { margin-top: 4px; font-size: 19px; }
+h3 { font-size: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; background: var(--fondo); }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--borde); }
+td.ok { color: #2f7d4f; font-weight: 600; }
+td.mal { color: #b23b3b; font-weight: 600; }
+.motivos li { margin: 4px 0; font-weight: 600; }
+.nota { font-size: 13px; opacity: 0.8; }
+code { font-family: Consolas, monospace; }

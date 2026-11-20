@@ -5,3 +5,5 @@ jenkins
 docs
 .env
 *.md
+reportes
+ci

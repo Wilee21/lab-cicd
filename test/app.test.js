@@ -44,3 +44,13 @@ test('GET /api/cursos/:id responde 404 si el curso no existe', async () => {
   const res = await fetch(`${base}/api/cursos/999`);
   assert.equal(res.status, 404);
 });
+
+test('GET /api/admin rechaza una contraseña incorrecta', async () => {
+  const res = await fetch(`${base}/api/admin`, { headers: { 'x-admin-password': 'otra' } });
+  assert.equal(res.status, 401);
+});
+
+test('GET /api/admin responde con la contraseña correcta', async () => {
+  const res = await fetch(`${base}/api/admin`, { headers: { 'x-admin-password': 'Adm1n-Catalogo-2026*' } });
+  assert.equal(res.status, 200);
+});

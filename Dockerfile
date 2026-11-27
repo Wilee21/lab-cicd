@@ -12,7 +12,11 @@ FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# npm, npx y corepack solo hacen falta para instalar: se retiran de la imagen final porque traen
+# dependencias propias con vulnerabilidades (las detecta Trivy) y la aplicación no los usa.
+RUN npm ci --omit=dev && npm cache clean --force \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+              /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY src ./src
 # Trazabilidad: el pipeline fija la versión y el commit; la aplicación los expone en /health y quedan
 # también como etiquetas OCI de la imagen (docker inspect).

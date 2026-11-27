@@ -3,7 +3,9 @@
 // main publica en el registro y, con aprobación explícita, despliega.
 //
 // Qué frena la ejecución: la revisión de costos, un secreto en el historial (Gitleaks), una dependencia
-// de producción con vulnerabilidades altas o críticas, una prueba que falla, la cobertura bajo su mínimo,
+// de producción con vulnerabilidades altas o críticas (npm audit y Trivy), una prueba que falla, la
+// cobertura bajo su mínimo, bugs, vulnerabilidades o Security Hotspots en SonarQube, vulnerabilidades
+// altas o críticas en la imagen construida (Trivy),
 // más avisos de ESLint que su tope o cualquier aviso NUEVO respecto a la última ejecución de main, y una
 // prueba de humo fallida sobre la imagen construida. Los topes están en ci/topes-calidad.properties.
 def topes = [:]
@@ -71,6 +73,11 @@ pipeline {
             sh 'sh ci/en-node.sh "npm audit --omit=dev --audit-level=high" > reportes/npm-audit.txt 2>&1; s=$?; cat reportes/npm-audit.txt; exit $s'
           }
         }
+        stage('Dependencias y Dockerfile (Trivy)') {
+          steps {
+            sh 'sh ci/trivy.sh fs'
+          }
+        }
       }
     }
 
@@ -85,6 +92,15 @@ pipeline {
       }
     }
 
+    stage('Análisis estático (SonarQube)') {
+      // SonarQube Community temporal (sin cuentas): analiza el código con la cobertura de la etapa anterior
+      // y aplica los topes de ci/topes-calidad.properties.
+      steps {
+        sh 'sh ci/sonarqube.sh'
+        sh 'sh ci/en-node.sh "node ci/revisar-sonarqube.js"'
+      }
+    }
+
     stage('Construir imagen Docker') {
       steps {
         sh '''
@@ -94,6 +110,12 @@ pipeline {
             --label org.opencontainers.image.source="$GIT_URL" \
             -t "$IMAGEN:$VERSION" -t "$IMAGEN:$ETIQUETA" .
         '''
+      }
+    }
+
+    stage('Escanear imagen (Trivy)') {
+      steps {
+        sh 'sh ci/trivy.sh imagen "$IMAGEN:$VERSION"'
       }
     }
 

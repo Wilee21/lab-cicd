@@ -22,12 +22,14 @@ La correspondencia entre cada componente de la propuesta y su implementación se
 ```mermaid
 flowchart LR
   dev[Desarrollador] -->|push / pull request| gh[GitHub]
-  gh --> ci[GitHub Actions<br/>costos · Gitleaks · ESLint<br/>pruebas y cobertura · audit · build]
+  gh --> ci[GitHub Actions<br/>calidad: ESLint · pruebas · SonarQube<br/>seguridad: Gitleaks · npm audit · Trivy<br/>imagen: build · Trivy]
   gh -->|revisa ramas cada 5 min| jk[Jenkins multibranch]
-  jk --> q[Calidad y seguridad<br/>ESLint · Gitleaks · npm audit]
+  jk --> q[Calidad y seguridad<br/>ESLint · Gitleaks · npm audit · Trivy]
   q --> t[Pruebas y cobertura<br/>con topes]
-  t --> b[Imagen Docker<br/>versión · rama-commit-ejecución]
-  b --> h[Prueba de humo]
+  t --> s[SonarQube<br/>con topes]
+  s --> b[Imagen Docker<br/>versión · rama-commit-ejecución]
+  b --> tv[Trivy sobre la imagen]
+  tv --> h[Prueba de humo]
   h -->|solo main| p[Publicación<br/>Docker Hub o localhost:5000]
   p -->|aprobación| d[Despliegue<br/>Kubernetes, fase 2]
   p -.->|cada noche| v[Pruebas en vivo]
@@ -40,8 +42,11 @@ flowchart LR
 | ESLint | Reporte JSON convertido al formato de Warnings Next Generation (`ci/eslint-a-issues.js`). | Hay más avisos que el tope o **un solo aviso nuevo** frente a `main`. |
 | Secretos (Gitleaks) | Revisa todo el historial de Git (`ci/gitleaks.sh`). | Encuentra cualquier secreto. |
 | Dependencias (npm audit) | Dependencias de producción. | Hay vulnerabilidades altas o críticas. |
+| Dependencias y Dockerfile (Trivy) | `ci/trivy.sh fs`: `package-lock.json` y configuración del Dockerfile. | Hay vulnerabilidades altas o críticas con corrección. |
 | Pruebas y cobertura | `node:test` con reportes JUnit y LCOV; `ci/revisar-cobertura.js` compara con el tope. | Falla una prueba o la cobertura baja del mínimo. |
+| Análisis estático (SonarQube) | `ci/sonarqube.sh` levanta un SonarQube Community temporal y analiza el código con la cobertura; `ci/revisar-sonarqube.js` aplica los topes. | Hay bugs, vulnerabilidades, Security Hotspots o code smells por encima del tope. |
 | Construir imagen Docker | Imagen con versión, commit y etiquetas OCI. | Falla la construcción. |
+| Escanear imagen (Trivy) | `ci/trivy.sh imagen` sobre la imagen recién construida. | Hay vulnerabilidades altas o críticas con corrección. |
 | Prueba de humo | Arranca la imagen y verifica `/health` (versión y commit) y `/api/cursos`. | La imagen no responde como se espera. |
 | Publicar imagen en el registro | Solo `main`: `1.0.<n>`, `<rama>-<commit>-<n>` y `latest`. | Falla la publicación. |
 | Desplegar | Solo `main` con el parámetro `DESPLEGAR`: pide aprobación explícita (`input`). | No se aprueba. |
@@ -55,6 +60,8 @@ Los topes están en [`ci/topes-calidad.properties`](ci/topes-calidad.properties)
 | Avisos de ESLint | 0 | 1 aviso o más, o cualquier aviso nuevo frente a `main` |
 | Cobertura de líneas de `src/` | 100 % | menos del 100 % |
 | Secretos (Gitleaks) | 0 | cualquier hallazgo |
+| SonarQube: bugs, vulnerabilidades, Security Hotspots y code smells | 0 cada uno | 1 o más |
+| Trivy y `npm audit`: vulnerabilidades altas o críticas | 0 | cualquier hallazgo con corrección disponible |
 
 Además de los totales, cada rama se compara con la última ejecución de `main` (`discoverReferenceBuild`): un aviso cuenta como **nuevo** si su línea es nueva o cambió. Así nadie hereda avisos anteriores, pero tampoco puede sumar otros.
 
@@ -77,7 +84,8 @@ El job `pruebas-en-vivo` se ejecuta cada noche (`H 2 * * *`) y a demanda. No pru
 | `.github/workflows/ci.yml` | Pipeline de integración continua (GitHub Actions). |
 | `.github/` | Dependabot, plantilla de historia de usuario con criterios de aceptación y plantilla de pull request. |
 | `Jenkinsfile` | Pipeline de CI/CD por rama (Jenkins multibranch). |
-| `ci/` | Scripts de los pipelines: revisión de costos, topes, Gitleaks, cobertura, página Resumen y pruebas en vivo. |
+| `ci/` | Scripts de los pipelines: revisión de costos, topes, Gitleaks, SonarQube, Trivy, cobertura, página Resumen y pruebas en vivo. |
+| `sonar-project.properties` | Configuración del análisis de SonarQube (fuentes, pruebas y cobertura). |
 | `Dockerfile` | Imagen multietapa: etapa `test` para validación y etapa `runtime` para la imagen final. |
 | `jenkins/` | Jenkins como código (imagen, plugins, JCasC, Docker Compose), secretos y avisos de Windows. |
 | `docs/` | Documentación técnica y evidencias de ejecución. |
@@ -144,18 +152,21 @@ La tarea programada **"Lab CICD avisos"** (`jenkins\avisos\instalar-avisos.ps1`)
 ## Seguridad
 
 - El repositorio no contiene secretos, y Gitleaks lo verifica en cada ejecución sobre todo el historial.
-- Las dependencias se revisan con `npm audit` en cada ejecución y Dependabot propone sus actualizaciones cada semana.
+- Las dependencias se revisan con `npm audit` y Trivy en cada ejecución, y Dependabot propone sus actualizaciones cada semana.
+- SonarQube revisa el código en cada ejecución, incluidas reglas de seguridad como credenciales escritas en el código.
+- Trivy escanea también la imagen final. La imagen no incluye `npm`, `npx` ni `corepack`, que solo se usan al instalar: el `npm` de la imagen base traía 6 vulnerabilidades altas que Trivy detectó.
+- El pull request #6 (`demo/vulnerabilidad-intencional`, no se fusiona) introduce a propósito una dependencia vulnerable y una contraseña escrita en el código para demostrar que el pipeline las detecta y bloquea el cambio. Detalle en la [documentación técnica](docs/documentacion-tecnica.md#7-demostración-el-pipeline-detecta-una-vulnerabilidad-intencional).
 - Jenkins y el registro solo se publican en `127.0.0.1`, sin acceso anónimo y con permisos por usuario.
 - La imagen final se ejecuta con el usuario `node` y no con root.
 - Jenkins accede al motor Docker del equipo anfitrión (socket montado) para construir imágenes y ejecutar las herramientas. Esta configuración es adecuada para un laboratorio local; en un entorno productivo se recomienda utilizar agentes de compilación dedicados.
 
 ## Costos
 
-Regla del laboratorio: **todo gratuito y local**. Jenkins, sus plugins, las imágenes oficiales, Gitleaks y el registro local son de código abierto, y GitHub Actions es gratuito para repositorios públicos con los ejecutores estándar. La primera etapa de ambos pipelines (`ci/revisar-costos.sh`) frena cualquier cambio que agregue un plugin no aprobado, un agente o servicio en la nube, un ejecutor de GitHub de pago o que exponga Jenkins fuera del equipo. Docker Desktop es gratuito para uso personal, educativo y de organizaciones pequeñas.
+Regla del laboratorio: **todo gratuito y local**. Jenkins, sus plugins, las imágenes oficiales, Gitleaks, SonarQube Community Build, Trivy y el registro local son de código abierto, y GitHub Actions es gratuito para repositorios públicos con los ejecutores estándar. La primera etapa de ambos pipelines (`ci/revisar-costos.sh`) frena cualquier cambio que agregue un plugin no aprobado, un agente o servicio en la nube, un ejecutor de GitHub de pago o que exponga Jenkins fuera del equipo. Docker Desktop es gratuito para uso personal, educativo y de organizaciones pequeñas.
 
 ## Próximas fases
 
-1. **Fase 2, Kubernetes y seguridad:** manifiestos de Kubernetes aplicados desde la etapa `Desplegar` (ya con aprobación explícita); análisis de la imagen (por ejemplo, Trivy) y OWASP Dependency-Check, que requiere una clave de la API del NVD para descargar su base de vulnerabilidades.
+1. **Fase 2, Kubernetes:** manifiestos de Kubernetes aplicados desde la etapa `Desplegar` (ya con aprobación explícita) y escaneo de esos manifiestos con Trivy.
 2. **Fase 3, monitoreo:** métricas y alertas sobre el endpoint `/health` y el comportamiento del servicio en el clúster.
 
 ## Evidencias
@@ -175,3 +186,17 @@ La documentación técnica completa se encuentra en [`docs/documentacion-tecnica
 **Integración continua en GitHub Actions**
 
 ![Ejecución del pipeline de CI en GitHub Actions](docs/capturas/github-actions.png)
+
+**SonarQube y Trivy en el pipeline**
+
+![Resultado de SonarQube frente a los topes](docs/capturas/sonarqube.png)
+
+![Escaneo de la imagen con Trivy](docs/capturas/trivy-imagen.png)
+
+**Demostración: el pipeline bloquea una vulnerabilidad intencional (pull request #6)**
+
+![Pull request de demostración bloqueado por el pipeline](docs/capturas/demo-pr-bloqueado.png)
+
+![SonarQube detecta la contraseña escrita en el código](docs/capturas/demo-sonarqube.png)
+
+![Trivy detecta las vulnerabilidades de lodash 4.17.15](docs/capturas/demo-trivy.png)

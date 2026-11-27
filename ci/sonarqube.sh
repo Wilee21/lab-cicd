@@ -69,7 +69,7 @@ docker run --rm --network "$red" $volumen -w "$PWD" -u "$(id -u):$(id -g)" \
   -e SONAR_USER_HOME="$PWD/.sonar" \
   -e HOME=/tmp \
   "$IMAGEN_SCANNER" \
-  -Dsonar.projectBaseDir="$PWD" \
+  -Dsonar.projectBaseDir="$PWD"   -Dsonar.working.directory="$PWD/.scannerwork" \
   -Dsonar.qualitygate.wait=true \
   -Dsonar.qualitygate.timeout=300
 

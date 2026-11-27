@@ -73,9 +73,27 @@ docker run --rm --network "$red" $volumen -w "$PWD" -u "$(id -u):$(id -g)" \
   -Dsonar.qualitygate.wait=true \
   -Dsonar.qualitygate.timeout=300
 
-metricas="bugs,vulnerabilities,security_hotspots,code_smells,coverage,duplicated_lines_density,ncloc"
-metricas="$metricas,software_quality_reliability_issues,software_quality_security_issues,software_quality_maintainability_issues"
-api GET "/api/measures/component?component=$proyecto&metricKeys=$metricas" > reportes/sonarqube-medidas.json
-api GET "/api/issues/search?componentKeys=$proyecto&resolved=false&ps=500" > reportes/sonarqube-issues.json
-api GET "/api/hotspots/search?projectKey=$proyecto&ps=500" > reportes/sonarqube-hotspots.json
+# Descarga resultados probando alternativas: los nombres de métricas y parámetros cambian entre versiones.
+consultar() {
+  salida=$1
+  shift
+  for ruta in "$@"; do
+    cuerpo=$(docker run --rm --network "$red" "$IMAGEN_CURL" -s -u admin:admin -w '
+%{http_code}' "http://sonarqube:9000$ruta")
+    codigo=$(printf '%s' "$cuerpo" | tail -n 1)
+    if [ "$codigo" = "200" ]; then
+      printf '%s' "$cuerpo" | sed '$d' > "$salida"
+      return 0
+    fi
+    echo "Aviso: $ruta respondió $codigo: $(printf '%s' "$cuerpo" | sed '$d' | head -c 300)"
+  done
+  echo "No se pudo obtener $salida"
+  return 1
+}
+
+clasicas="bugs,vulnerabilities,security_hotspots,code_smells,coverage,duplicated_lines_density,ncloc"
+nuevas="software_quality_reliability_issues,software_quality_security_issues,software_quality_maintainability_issues,security_hotspots,coverage,duplicated_lines_density,ncloc"
+consultar reportes/sonarqube-medidas.json   "/api/measures/component?component=$proyecto&metricKeys=$clasicas"   "/api/measures/component?component=$proyecto&metricKeys=$nuevas"
+consultar reportes/sonarqube-issues.json   "/api/issues/search?components=$proyecto&resolved=false&ps=500"   "/api/issues/search?componentKeys=$proyecto&resolved=false&ps=500"
+consultar reportes/sonarqube-hotspots.json   "/api/hotspots/search?project=$proyecto&ps=500"   "/api/hotspots/search?projectKey=$proyecto&ps=500"
 echo "Resultados de SonarQube en reportes/sonarqube-*.json"

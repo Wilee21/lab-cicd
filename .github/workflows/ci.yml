@@ -21,6 +21,9 @@ jobs:
     steps:
       - name: Checkout del código
         uses: actions/checkout@v7
+        with:
+          # Historial completo para que SonarQube asocie cada línea con su commit (blame).
+          fetch-depth: 0
 
       - name: Revisión de costos
         run: sh ci/revisar-costos.sh

@@ -78,8 +78,7 @@ consultar() {
   salida=$1
   shift
   for ruta in "$@"; do
-    cuerpo=$(docker run --rm --network "$red" "$IMAGEN_CURL" -s -u admin:admin -w '
-%{http_code}' "http://sonarqube:9000$ruta")
+    cuerpo=$(docker run --rm --network "$red" "$IMAGEN_CURL" -s -u admin:admin -w '\n%{http_code}' "http://sonarqube:9000$ruta")
     codigo=$(printf '%s' "$cuerpo" | tail -n 1)
     if [ "$codigo" = "200" ]; then
       printf '%s' "$cuerpo" | sed '$d' > "$salida"

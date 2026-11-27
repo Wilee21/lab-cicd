@@ -42,10 +42,11 @@ El proyecto del curso exige una aplicación web alojada en GitHub que en las fas
 | Control de versiones: GitLab con merge requests | GitHub con pull requests; plantilla de pull request con lista de verificación. | Implementado |
 | Integración continua: Jenkins en Docker con JCasC | Jenkins multibranch en Docker con JCasC (`jenkins/`) y GitHub Actions como segunda línea de validación. | Implementado |
 | Calidad de código con topes (trinquete) y avisos nuevos | ESLint con tope en `ci/topes-calidad.properties` y falla ante un aviso nuevo frente a `main` (Warnings Next Generation). | Implementado |
+| Análisis estático en cada rama | SonarQube Community Build en un contenedor temporal, con la cobertura de las pruebas y topes de bugs, vulnerabilidades, Security Hotspots y code smells. | Implementado |
 | Pruebas automatizadas y cobertura con mínimo (Kover) | `node:test` con reportes JUnit y cobertura de líneas con mínimo del 100 %. | Implementado |
 | Revisión de costos antes de compilar | `ci/revisar-costos.sh` como primera etapa de ambos pipelines. | Implementado |
 | Seguridad: Gitleaks | Gitleaks sobre todo el historial en Jenkins y en GitHub Actions. | Implementado |
-| Seguridad: revisión de dependencias (OWASP Dependency-Check) | `npm audit` de dependencias de producción y Dependabot; OWASP Dependency-Check requiere una clave de la API del NVD. | Parcial; fase 2 |
+| Seguridad: revisión de dependencias (OWASP Dependency-Check) | Trivy sobre las dependencias, el Dockerfile y la imagen construida, junto con `npm audit` y Dependabot (ver 2.3). | Implementado, con cambio de herramienta |
 | Gestión de credenciales fuera del repositorio | Secretos en el Administrador de credenciales de Windows (DPAPI) y credencial cifrada en Jenkins; usuarios `admin` y `lector`. | Implementado |
 | Entrega continua a QA: Firebase App Distribution | Publicación de la imagen versionada en un registro (Docker Hub o local). | Implementado |
 | Trazabilidad entre commit, compilación y versión | Etiquetas `1.0.<n>` y `<rama>-<commit>-<n>`, etiquetas OCI y `/health` con versión y commit. | Implementado |
@@ -59,6 +60,19 @@ El proyecto del curso exige una aplicación web alojada en GitHub que en las fas
 La firma del APK y la distribución por tiendas son propias de la aplicación móvil; en el servicio web, su función la cumplen la publicación de la imagen y el despliegue en Kubernetes.
 
 El laboratorio también conserva el flujo operativo definido en la Actividad 2: el cambio se desarrolla en una rama, la integración continua lo valida antes de la revisión por pares, la entrega continua construye y publica un artefacto versionado tras la fusión y, en las fases siguientes, el despliegue y el monitoreo cierran el ciclo de retroalimentación.
+
+### 2.3 Cambios frente a la arquitectura propuesta y su justificación
+
+El diseño de la Actividad 2 se tomó como punto de partida y no como una especificación cerrada. Al llevarlo a la práctica se hicieron los siguientes cambios:
+
+| Propuesta (Actividad 2) | Implementación | Motivo del cambio |
+| --- | --- | --- |
+| Aplicación móvil en Kotlin Multiplatform, alojada en GitLab | Servicio web en Node.js alojado en GitHub | El proyecto del curso exige una aplicación web en GitHub que en las fases siguientes se despliegue en Kubernetes. Los principios de la propuesta se mantienen sobre un servicio del mismo dominio. |
+| OWASP Dependency-Check para las dependencias | Trivy, más `npm audit` y Dependabot | Dependency-Check necesita una clave de la API del NVD y descargar su base completa en cada entorno, lo que hace lenta y frágil la ejecución en GitHub Actions. Trivy cubre con una sola herramienta las dependencias, la configuración del Dockerfile y la imagen final, no requiere cuenta y es la herramienta usada como referencia en el curso. |
+| Análisis estático con los analizadores del proyecto móvil | ESLint y SonarQube Community Build | ESLint detecta errores de programación, pero no reglas de seguridad como credenciales escritas en el código. SonarQube agrega esa revisión y la medición de cobertura y mantenibilidad. Se ejecuta como un contenedor temporal en lugar de SonarCloud o un servidor permanente, para no depender de cuentas externas ni generar costos. |
+| Migración de Jenkins a un servidor en la nube | Jenkins en Docker en el equipo local, publicado solo en `127.0.0.1` | El laboratorio se limita a herramientas gratuitas (`ci/revisar-costos.sh` lo verifica en cada ejecución). La definición como código (JCasC y Docker Compose) permite trasladar Jenkins a un servidor sin cambios en el pipeline cuando el proyecto lo requiera. |
+| Firebase App Distribution y Fastlane | Publicación de la imagen versionada en un registro | Son herramientas de distribución de aplicaciones móviles; en un servicio web, su función la cumple el registro de imágenes. |
+| Firebase Crashlytics | Endpoint `/health`, base para el monitoreo de la fase 3 | El monitoreo corresponde a la tercera fase del proyecto. |
 
 ## 3. Aplicación
 
@@ -82,6 +96,8 @@ API desarrollada en Node.js 24 con Express que expone un catálogo de cursos:
 | Docker | Empaquetado y herramientas | Garantiza que la aplicación y las herramientas se ejecuten igual en cualquier entorno. |
 | Docker Hub o Docker Registry (`registry:2`) | Registro de imágenes | Docker Hub es público; el registro local implementa el mismo protocolo sin depender de una cuenta externa. |
 | ESLint | Análisis estático | Identifica errores y malas prácticas antes de la ejecución del código. |
+| SonarQube Community Build | Análisis estático de calidad y seguridad | Detecta bugs, vulnerabilidades (por ejemplo, contraseñas escritas en el código) y code smells, y calcula la cobertura. Se levanta en un contenedor temporal en cada ejecución, sin cuentas ni costos. |
+| Trivy | Seguridad de dependencias, Dockerfile e imagen | Escanea `package-lock.json`, la configuración del Dockerfile y los paquetes de la imagen construida contra bases de vulnerabilidades conocidas; falla con hallazgos altos o críticos que tengan corrección. |
 | `node:test` | Pruebas y cobertura | Ejecutor nativo de Node.js con reportes JUnit y LCOV; no incorpora dependencias adicionales. |
 | Gitleaks | Seguridad | Detecta secretos en todo el historial de Git. |
 | `npm audit` y Dependabot | Seguridad | Identifican vulnerabilidades conocidas y proponen actualizaciones de dependencias. |
@@ -89,20 +105,19 @@ API desarrollada en Node.js 24 con Express que expone un catálogo de cursos:
 
 ## 5. Pipeline de CI: GitHub Actions
 
-Archivo: `.github/workflows/ci.yml`. Se ejecuta en cada `push` (en todas las ramas) y en cada `pull_request`, con las mismas reglas que Jenkins:
+Archivo: `.github/workflows/ci.yml`. Se ejecuta en cada `push` (en todas las ramas) y en cada `pull_request`, con las mismas reglas que Jenkins, organizado en tres jobs:
 
-1. **Checkout del código** con el historial completo (`fetch-depth: 0`).
-2. **Revisión de costos** (`ci/revisar-costos.sh`).
-3. **Secretos en el historial** con Gitleaks.
-4. **Configuración de Node.js 24**, con caché de npm.
-5. **Instalación de dependencias** con `npm ci`.
-6. **Análisis estático** con ESLint.
-7. **Pruebas y cobertura**, con el mínimo de `ci/topes-calidad.properties`.
-8. **Auditoría de dependencias** con `npm audit --audit-level=high`.
-9. **Verificación de la construcción de la imagen Docker.**
-10. **Reportes** (JUnit, LCOV, ESLint y Gitleaks) guardados como artefacto de la ejecución.
+| Job | Pasos | Frena la ejecución si… |
+| --- | --- | --- |
+| Calidad (pruebas y SonarQube) | Checkout, revisión de costos, Node.js 24, `npm ci`, ESLint, pruebas con cobertura, análisis con SonarQube (`ci/sonarqube.sh`) y comparación con los topes (`ci/revisar-sonarqube.js`). | Falla una prueba, la cobertura baja del mínimo o SonarQube supera un tope. |
+| Seguridad (secretos y dependencias) | Gitleaks sobre todo el historial, `npm audit` de las dependencias de producción y Trivy sobre las dependencias y el Dockerfile (`ci/trivy.sh fs`). Las tres revisiones se ejecutan aunque una falle, para reportar todos los hallazgos. | Hay secretos o vulnerabilidades altas o críticas. |
+| Imagen Docker (construcción y Trivy) | Construye la imagen final y la escanea con Trivy (`ci/trivy.sh imagen`). Solo corre si los dos jobs anteriores pasan. | La imagen tiene vulnerabilidades altas o críticas con corrección. |
 
-Si alguno de los pasos falla, el commit o el pull request se marca como fallido en GitHub y su autor recibe la notificación.
+Cada job guarda sus reportes como artefacto de la ejecución (JUnit, LCOV, SonarQube, npm audit, Trivy y Gitleaks). Si alguno falla, el commit o el pull request se marca como fallido en GitHub y su autor recibe la notificación.
+
+**SonarQube sin cuentas.** `ci/sonarqube.sh` inicia un servidor SonarQube Community Build en un contenedor, espera a que esté disponible, crea un token de análisis, ejecuta `sonar-scanner` con la configuración de `sonar-project.properties` (incluida la cobertura de `reportes/lcov.info`) y descarga las medidas, los hallazgos y los Security Hotspots. Al terminar elimina el servidor. El mismo script funciona en GitHub Actions y en Jenkins.
+
+**Hallazgo real durante la implementación.** En su primera ejecución, Trivy encontró 6 vulnerabilidades altas en la imagen. No estaban en las dependencias de la aplicación, sino en el `npm` que incluye la imagen base de Node.js. Como la aplicación no usa `npm` en ejecución, la etapa final del Dockerfile lo retira junto con `npx` y `corepack`, lo que elimina los hallazgos y reduce la superficie de ataque de la imagen.
 
 ## 6. Pipeline de CI/CD: Jenkins
 
@@ -112,9 +127,11 @@ Archivo: `Jenkinsfile`, ejecutado por el job multibranch `catalogo-cursos` para 
 | --- | --- | --- |
 | Revisar costos | Plugins aprobados, sin agentes en la nube, Jenkins solo en `127.0.0.1` e imágenes base esperadas. | Aparece algo que pueda generar costos o exponer Jenkins. |
 | Instalar dependencias | `npm ci` en un contenedor de Node.js 24 que comparte el workspace (`ci/en-node.sh`). | Falla la instalación. |
-| Calidad y seguridad (en paralelo) | ESLint, Gitleaks sobre el historial y `npm audit` de las dependencias de producción. | Hay secretos o vulnerabilidades altas; los avisos de ESLint se evalúan contra su tope. |
+| Calidad y seguridad (en paralelo) | ESLint, Gitleaks sobre el historial, `npm audit` de las dependencias de producción y Trivy sobre las dependencias y el Dockerfile. | Hay secretos o vulnerabilidades altas; los avisos de ESLint se evalúan contra su tope. |
 | Pruebas y cobertura | `node:test` con reportes JUnit y LCOV; `ci/revisar-cobertura.js` compara con el mínimo. | Falla una prueba o la cobertura baja del mínimo. |
+| Análisis estático (SonarQube) | `ci/sonarqube.sh` con la cobertura de la etapa anterior y `ci/revisar-sonarqube.js`. | Hay bugs, vulnerabilidades, Security Hotspots o code smells por encima de su tope. |
 | Construir imagen Docker | Imagen con versión, commit y etiquetas OCI. | Falla la construcción. |
+| Escanear imagen (Trivy) | `ci/trivy.sh imagen` sobre la imagen recién construida. | Tiene vulnerabilidades altas o críticas con corrección. |
 | Prueba de humo | Arranca la imagen y comprueba `/health` (versión y commit esperados) y `/api/cursos`. | La imagen no responde como se espera. |
 | Publicar imagen en el registro | Solo `main`: etiquetas `1.0.<n>`, `<rama>-<commit>-<n>` y `latest`. | Falla la publicación. |
 | Desplegar | Solo `main` con el parámetro `DESPLEGAR`: solicita una aprobación explícita. | No se aprueba. |
@@ -123,7 +140,7 @@ Al finalizar, Jenkins registra los avisos de ESLint y de Gitleaks con sus qualit
 
 ### Topes de calidad
 
-Los topes de `ci/topes-calidad.properties` (0 avisos de ESLint y 100 % de cobertura de líneas) funcionan como un trinquete: la ejecución falla si un número empeora y, cuando un cambio lo mejora, el tope se ajusta en el mismo commit. Además, cada rama se compara con la última ejecución de `main` (`discoverReferenceBuild`) y falla con un solo aviso nuevo, aunque el total siga dentro del tope.
+Los topes de `ci/topes-calidad.properties` (0 avisos de ESLint, 100 % de cobertura de líneas y, en SonarQube, 0 bugs, 0 vulnerabilidades, 0 Security Hotspots y 0 code smells) funcionan como un trinquete: la ejecución falla si un número empeora y, cuando un cambio lo mejora, el tope se ajusta en el mismo commit. Además, cada rama se compara con la última ejecución de `main` (`discoverReferenceBuild`) y falla con un solo aviso nuevo, aunque el total siga dentro del tope.
 
 ### Página Resumen
 
@@ -146,11 +163,31 @@ El job `pruebas-en-vivo` (`ci/PruebasEnVivo.Jenkinsfile`) se ejecuta cada noche 
 - `secretos/` y `arrancar-jenkins.ps1`: los secretos se guardan en el Administrador de credenciales de Windows y se entregan a Docker Compose solo en memoria.
 - `avisos/`: tarea programada que muestra un aviso de Windows cuando una ejecución falla o se arregla.
 
-## 7. Evidencias
+## 7. Demostración: el pipeline detecta una vulnerabilidad intencional
+
+Para comprobar que los controles de seguridad funcionan, la rama `demo/vulnerabilidad-intencional` introduce dos problemas a propósito y se propone a `main` mediante el pull request #6, que **no se fusiona**:
+
+1. La dependencia `lodash 4.17.15`, con vulnerabilidades conocidas.
+2. Una contraseña escrita en `src/app.js` (`ADMIN_PASSWORD`), usada por un endpoint de administración.
+
+| Herramienta | Resultado |
+| --- | --- |
+| `npm audit` | 1 vulnerabilidad alta en lodash. |
+| Trivy | 4 vulnerabilidades altas en lodash 4.17.15, entre ellas CVE-2020-8203 (prototype pollution) y CVE-2021-23337 (inyección de comandos). |
+| SonarQube | `src/app.js:9`: posible contraseña escrita en el código (regla `javascript:S2068`); supera el tope de 0 vulnerabilidades. |
+| Gitleaks | No la detecta: su regla genérica no clasifica este valor como secreto. |
+
+Los jobs de calidad y de seguridad fallan, el de imagen no se ejecuta y el pull request queda marcado como fallido, de modo que el cambio no llega a `main`. El resultado de Gitleaks muestra por qué la arquitectura combina varias herramientas: cada una cubre un tipo de riesgo distinto y ninguna basta por sí sola.
+
+## 8. Evidencias
 
 | Evidencia | Archivo |
 | --- | --- |
-| Ejecución del pipeline de CI en GitHub Actions | `docs/capturas/github-actions.png` |
+| Ejecución del pipeline de CI en GitHub Actions (tres jobs en verde) | `docs/capturas/github-actions.png` |
+| Resultado de SonarQube frente a los topes | `docs/capturas/sonarqube.png` |
+| Escaneo de la imagen con Trivy | `docs/capturas/trivy-imagen.png` |
+| Pull request de demostración bloqueado por el pipeline | `docs/capturas/demo-pr-bloqueado.png` |
+| Hallazgos de la demostración en SonarQube y Trivy | `docs/capturas/demo-sonarqube.png` y `docs/capturas/demo-trivy.png` |
 | Vista de stages del pipeline en Jenkins (`main`) | `docs/capturas/jenkins.png` |
 | Ramas del job multibranch (incluida una rama detenida por la revisión de costos) | `docs/capturas/jenkins-ramas.png` |
 | Página Resumen de una ejecución exitosa | `docs/capturas/resumen-exito.png` |
@@ -159,9 +196,9 @@ El job `pruebas-en-vivo` (`ci/PruebasEnVivo.Jenkinsfile`) se ejecuta cada noche 
 | Trazabilidad de la imagen publicada (etiquetas OCI y `/health`) | `docs/capturas/trazabilidad.png` |
 | Imagen publicada en el registro | `docs/capturas/registro-local.png` |
 
-## 8. Próximas fases del proyecto
+## 9. Próximas fases del proyecto
 
 | Fase del curso | Alcance | Continuidad con la Actividad 2 |
 | --- | --- | --- |
-| Fase 2: Kubernetes y seguridad | Manifiestos de Kubernetes aplicados desde el stage `Desplegar`, que ya exige aprobación; análisis de la imagen (por ejemplo, Trivy) y OWASP Dependency-Check con clave de la API del NVD. | Completa la seguridad propuesta y el paso controlado a producción. |
+| Fase 2: Kubernetes | Manifiestos de Kubernetes aplicados desde el stage `Desplegar`, que ya exige aprobación, y escaneo de esos manifiestos con Trivy. | Completa el paso controlado a producción. |
 | Fase 3: monitoreo | Métricas y alertas sobre el endpoint `/health` y el comportamiento del servicio en el clúster. | Equivale, para el servicio web, al monitoreo propuesto con Firebase Crashlytics. |

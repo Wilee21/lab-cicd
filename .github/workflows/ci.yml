@@ -1,7 +1,9 @@
 # Integración continua: se ejecuta en cada push y en cada pull request.
-# Aplica las mismas reglas que el pipeline de Jenkins: revisión de costos, secretos, análisis estático,
-# pruebas con cobertura mínima (ci/topes-calidad.properties), auditoría de dependencias y construcción
-# de la imagen.
+# Aplica las mismas reglas que el pipeline de Jenkins, en tres jobs para ver cada resultado por separado:
+#   calidad   -> revisión de costos, ESLint, pruebas con cobertura y análisis estático con SonarQube
+#   seguridad -> secretos (Gitleaks), dependencias (npm audit) y dependencias + Dockerfile (Trivy)
+#   imagen    -> construye la imagen Docker y la escanea con Trivy (solo si los otros dos pasan)
+# Los topes están en ci/topes-calidad.properties.
 name: CI
 
 on:
@@ -13,20 +15,15 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  calidad:
+    name: Calidad (pruebas y SonarQube)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout del código
         uses: actions/checkout@v7
-        with:
-          # Historial completo para que Gitleaks revise todos los commits.
-          fetch-depth: 0
 
       - name: Revisión de costos
         run: sh ci/revisar-costos.sh
-
-      - name: Secretos en el historial (Gitleaks)
-        run: MONTAR_DIRECTORIO=1 sh ci/gitleaks.sh
 
       - name: Configurar Node.js 24
         uses: actions/setup-node@v7
@@ -46,17 +43,80 @@ jobs:
           npm run -s test:cobertura
           node ci/revisar-cobertura.js
 
-      - name: Auditoría de dependencias
-        # Reporta vulnerabilidades de severidad alta o crítica en las dependencias.
-        run: npm audit --audit-level=high
+      - name: Análisis estático de código (SonarQube)
+        run: MONTAR_DIRECTORIO=1 sh ci/sonarqube.sh
 
-      - name: Verificar que la imagen Docker construye
-        run: docker build --target runtime --build-arg GIT_COMMIT=${{ github.sha }} -t catalogo-cursos:ci .
+      - name: Topes de SonarQube
+        run: node ci/revisar-sonarqube.js
 
       - name: Guardar reportes
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: reportes
+          name: reportes-calidad
+          path: reportes/
+          if-no-files-found: ignore
+
+  seguridad:
+    name: Seguridad (secretos y dependencias)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v7
+        with:
+          # Historial completo para que Gitleaks revise todos los commits.
+          fetch-depth: 0
+
+      # Cada revisión corre aunque la anterior falle, para reportar todos los hallazgos de una vez.
+      - name: Secretos en el historial (Gitleaks)
+        run: MONTAR_DIRECTORIO=1 sh ci/gitleaks.sh
+
+      - name: Configurar Node.js 24
+        if: ${{ !cancelled() }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Dependencias (npm audit)
+        if: ${{ !cancelled() }}
+        # Vulnerabilidades altas o críticas en las dependencias de producción.
+        run: |
+          mkdir -p reportes
+          npm audit --omit=dev --audit-level=high > reportes/npm-audit.txt 2>&1; s=$?
+          cat reportes/npm-audit.txt
+          exit $s
+
+      - name: Dependencias y Dockerfile (Trivy)
+        if: ${{ !cancelled() }}
+        run: MONTAR_DIRECTORIO=1 sh ci/trivy.sh fs
+
+      - name: Guardar reportes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reportes-seguridad
+          path: reportes/
+          if-no-files-found: ignore
+
+  imagen:
+    name: Imagen Docker (construcción y Trivy)
+    needs: [calidad, seguridad]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v7
+
+      - name: Construir la imagen
+        run: docker build --target runtime --build-arg GIT_COMMIT=${{ github.sha }} -t catalogo-cursos:ci .
+
+      - name: Escanear la imagen (Trivy)
+        run: MONTAR_DIRECTORIO=1 sh ci/trivy.sh imagen catalogo-cursos:ci
+
+      - name: Guardar reportes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reportes-imagen
           path: reportes/
           if-no-files-found: ignore
